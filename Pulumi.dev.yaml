@@ -1,5 +1,6 @@
 encryptionsalt: v1:ZVIdKID7yFg=:v1:DDHPZIPialxy7Q7M:UEGJhgdr77YoTSgOjN+K4kti7MJNaA==
 config:
+  aws:profile: dev
   aws:region: us-east-1
   iac-pulumi:vpcCidrBlock: 10.0.0.0/16
   iac-pulumi:destinationCidrBlock: 0.0.0.0/0
