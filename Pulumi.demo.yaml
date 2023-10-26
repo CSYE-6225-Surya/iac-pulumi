@@ -1,9 +1,9 @@
 config:
-  aws:profile: dev
+  aws:profile: demo
   aws:region: us-east-1
   iac-pulumi:vpcCidrBlock: 10.0.0.0/16
   iac-pulumi:destinationCidrBlock: 0.0.0.0/0
-  iac-pulumi:amiId: ami-0ee4a461238ab7a20
+  iac-pulumi:amiId: ami-0bf6a05cec288068d
   iac-pulumi:instanceType: t2.micro
   iac-pulumi:keyName: aws-demo-account-key-pair
   iac-pulumi:volumeSize: 25
