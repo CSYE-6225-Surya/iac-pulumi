@@ -8,6 +8,7 @@ const config = new pulumi.Config("iac-pulumi");
 
 const vpcCidrBlock = config.require("vpcCidrBlock");
 const destinationCidrBlock = config.require("destinationCidrBlock");
+const desiredSubnetCount = config.require("desiredSubnetCount");
 const amiId = config.require("amiId");
 const instanceType = config.require("instanceType");
 const keyName = config.require("keyName");
@@ -29,6 +30,8 @@ const dbSkipFinalSnapshot = config.require("dbSkipFinalSnapshot");
 const dbUsername = config.require("dbUsername");
 const dbPubliclyAccessible = config.require("dbPubliclyAccessible");
 const dbStorageType = config.require("dbStorageType");
+const devAccountId = config.require("devAccountId");
+const demoAccountId = config.require("demoAccountId");
 
 async function main() {
 
@@ -52,7 +55,7 @@ async function main() {
 
         for (let i = 0; i < availabilityZones.names.length; i++) {
             // Subnets
-            if (i === 3) {
+            if (i === parseInt(desiredSubnetCount)) {
                 break;
             }
             const publicSubnet = new aws.ec2.Subnet(`public-subnet-${i}`, {
@@ -222,14 +225,56 @@ async function main() {
             cd /opt/webapp
             node changeConfig.js
             npm run migrate
+            cd src
+            mkdir logs
+            cd logs
+            touch log-file.log
+            sudo chown csye6225user:csye6225group log-file.log
+            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config \
+                -m ec2 \
+                -c file:/opt/webapp/src/config/cloudwatch-config.json \
+                -s
+            sudo service amazon-cloudwatch-agent restart
             sudo systemctl enable webapp.service
             sudo systemctl start webapp.service
             `;
         });
 
+        // First we'll create a role for our Ec2 instance
+        const cloudWatchAgentServerRole = new aws.iam.Role("cloudWatchAgentServerRole", {
+            assumeRolePolicy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [
+                    {
+                        Action: "sts:AssumeRole",
+                        Principal: { Service: "ec2.amazonaws.com" },
+                        Effect: "Allow"
+                    }
+                ]
+            }),
+            description: "Role for allowing CloudWatch Agent to send metrics/logs to CloudWatch",
+            name: "CloudWatchAgentServerRole"
+        });
+
+        // We attach the existing policy CloudWatchAgentServerPolicy to the role
+        const cloudWatchPolicyAttachment = new aws.iam.RolePolicyAttachment("cloudWatchPolicyAttachment", {
+            role: cloudWatchAgentServerRole.name,
+            policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        }, { dependsOn: cloudWatchAgentServerRole });
+
+        const instanceProfile = new aws.iam.InstanceProfile("instanceProfile", {
+            role: cloudWatchAgentServerRole.name
+        }, { dependsOn: cloudWatchAgentServerRole });
+
+        const latestAmi = await aws.ec2.getAmi({
+            mostRecent: true,
+            owners: [devAccountId, demoAccountId],
+        })
+
         // Create an EC2 instance associated with the security group
         const ec2Instance = new aws.ec2.Instance("myInstance", {
-            ami: amiId, // Replace with your custom AMI ID
+            ami: latestAmi.id || amiId, // Replace with your custom AMI ID
             instanceType: instanceType, // Replace with your desired instance type
             vpcSecurityGroupIds: [appSecurityGroup.id], // Associate the security group with the instance
             keyName: keyName,
@@ -249,12 +294,33 @@ async function main() {
             instanceInitiatedShutdownBehavior: "stop",
             subnetId: publicSubnets[0].id, // Replace with the ID of the subnet in your VPC
             userData: pulumi.interpolate`${userDataScript}`,
-        }, { dependsOn: [rdsInstance, databaseSecurityGroup] });
+            iamInstanceProfile: instanceProfile,
+            role: cloudWatchAgentServerRole.name
+        }, { dependsOn: [rdsInstance, databaseSecurityGroup, cloudWatchPolicyAttachment, instanceProfile] });
 
         // Export the security group ID and instance ID
         exports.appSecurityGroupId = appSecurityGroup.id;
         exports.databaseSecurityGroupId = databaseSecurityGroup.id;
         exports.instanceId = ec2Instance.id;
+
+        // Create a DNS record for the web server
+        const dnsRecord = new aws.route53.Record("my-instance-dns", {
+            name: "dev.saisuryateja.me",    // Replace with your domain name
+            type: "A",
+            records: [ec2Instance.publicIp],
+            ttl: 300,
+            zoneId: (await aws.route53.getZone({ name: "dev.saisuryateja.me" })).zoneId,   // Replace with your domain Id
+        }, { dependsOn: ec2Instance });
+
+        exports.dnsRecord = dnsRecord;
+        const logGroup = new aws.cloudwatch.LogGroup("csye6225LogGroup", {
+            name: "csye6225",
+        });
+
+        const logStream = new aws.cloudwatch.LogStream("WebappLogStream", {
+            name: "webapp",
+            logGroupName: logGroup.name,
+        }, { dependsOn: logGroup });
 
 
     } catch (error) {

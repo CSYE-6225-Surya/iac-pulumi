@@ -3,7 +3,8 @@ config:
   aws:region: us-east-1
   iac-pulumi:vpcCidrBlock: 10.0.0.0/16
   iac-pulumi:destinationCidrBlock: 0.0.0.0/0
-  iac-pulumi:amiId: ami-0ee4a461238ab7a20
+  iac-pulumi:desiredSubnetCount: 3
+  iac-pulumi:amiId: ami-03a4b5a86008749d0
   iac-pulumi:instanceType: t2.micro
   iac-pulumi:keyName: aws-demo-account-key-pair
   iac-pulumi:volumeSize: 25
@@ -24,3 +25,5 @@ config:
   iac-pulumi:dbUsername: csye6225
   iac-pulumi:dbPubliclyAccessible: false
   iac-pulumi:dbStorageType: gp3
+  iac-pulumi:devAccountId: 912764834865
+  iac-pulumi:demoAccountId: 889150626858
