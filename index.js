@@ -17,6 +17,7 @@ const volumeType = config.require("volumeType");
 const dbPort = config.require("dbPort");
 const dbFamily = config.require("dbFamily");
 const ingressPorts = JSON.parse(config.require("ingressPorts"));
+const loadBalancerIngressPorts = JSON.parse(config.require("loadBalancerIngressPorts"));
 const dbAllocatedStorage = config.require("dbAllocatedStorage");
 const dbBackupRetentionPeriod = config.require("dbBackupRetentionPeriod");
 const dbInstanceIndentifier = config.require("dbInstanceIndentifier");
@@ -32,6 +33,31 @@ const dbPubliclyAccessible = config.require("dbPubliclyAccessible");
 const dbStorageType = config.require("dbStorageType");
 const devAccountId = config.require("devAccountId");
 const demoAccountId = config.require("demoAccountId");
+const dnsRecordName = config.require("dnsRecordName");
+const loadBalancerEgressPort = config.require("loadBalancerEgressPort");
+const targetGroupPort = config.require("targetGroupPort");
+const targetGroupProtocol = config.require("targetGroupProtocol");
+const targetGroupType = config.require("targetGroupType");
+const targetGroupUnHealthyThreshold = config.require("targetGroupUnHealthyThreshold");
+const targetGroupHealthyThreshold = config.require("targetGroupHealthyThreshold");
+const targetGroupInterval = config.require("targetGroupInterval");
+const targetGroupTimeout = config.require("targetGroupTimeout");
+const targetGroupPath = config.require("targetGroupPath");
+const listenerGroupPort = config.require("listenerGroupPort");
+const listenerGroupProtocol = config.require("listenerGroupProtocol");
+const deviceName = config.require("deviceName");
+const autoScaleDesiredCapacity = config.require("autoScaleDesiredCapacity");
+const autoScaleMinSize = config.require("autoScaleMinSize");
+const autoScaleMaxSize = config.require("autoScaleMaxSize");
+const autoScaleCoolDown = config.require("autoScaleCoolDown");
+const metricAlarmScaleUpComparisonOperator = config.require("metricAlarmScaleUpComparisonOperator");
+const metricAlarmScaleDownComparisonOperator = config.require("metricAlarmScaleDownComparisonOperator");
+const metricAlarmMetricName = config.require("metricAlarmMetricName");
+const metricAlarmNamespace = config.require("metricAlarmNamespace");
+const metricAlarmStaistic = config.require("metricAlarmStaistic");
+const metricAlarmThreshold = config.require("metricAlarmThreshold");
+const metricAlarmEvaluationPeriods = config.require("metricAlarmEvaluationPeriods");
+const metricAlarmPeriod = config.require("metricAlarmPeriod");
 
 async function main() {
 
@@ -137,8 +163,36 @@ async function main() {
                 routeTableId: privateRouteTable.id,
             });
         }
-
         exports.privateRouteTableId = privateRouteTable.id;
+
+        let loadBalancerIngressArray = [];
+        for (let i = 0; i < loadBalancerIngressPorts.length; i++) {
+            let obj = {
+                description: "Rules",
+                fromPort: 0,
+                toPort: 0,
+                protocol: "tcp",
+                cidrBlocks: [destinationCidrBlock],
+            };
+            obj.fromPort = parseInt(loadBalancerIngressPorts[i]);
+            obj.toPort = parseInt(loadBalancerIngressPorts[i]);
+            loadBalancerIngressArray.push(obj);
+            obj = {};
+        }
+
+        const lbSecurityGroup = new aws.ec2.SecurityGroup("load balancer security group", {
+            description: "Security group for load balancer",
+            vpcId: vpc.id, // Replace with your VPC ID
+            ingress: loadBalancerIngressArray,
+            egress: [
+                {
+                    cidrBlocks: [destinationCidrBlock],
+                    protocol: "tcp",
+                    fromPort: parseInt(loadBalancerEgressPort),
+                    toPort: parseInt(loadBalancerEgressPort),
+                }
+            ],
+        });
         let ingressArray = [];
         for (let i = 0; i < ingressPorts.length; i++) {
             let obj = {
@@ -147,9 +201,13 @@ async function main() {
                 toPort: 0,
                 protocol: "tcp",
                 cidrBlocks: [destinationCidrBlock],
+                securityGroups: [lbSecurityGroup.id]
             };
             obj.fromPort = parseInt(ingressPorts[i]);
             obj.toPort = parseInt(ingressPorts[i]);
+            if (parseInt(ingressPorts[i]) === 3000) {
+                delete obj.cidrBlocks;
+            }
             ingressArray.push(obj);
             obj = {};
         }
@@ -167,7 +225,8 @@ async function main() {
                 }
             ],
 
-        });
+        }, { dependsOn: lbSecurityGroup });
+
 
         const databaseSecurityGroup = new aws.ec2.SecurityGroup("database security group", {
             description: "Security group for RDS instances",
@@ -198,7 +257,7 @@ async function main() {
             backupRetentionPeriod: dbBackupRetentionPeriod,
             dbInstanceIdentifier: dbInstanceIndentifier,
             engine: dbEngine, // PostgreSQL database engine
-            engineVersion: dbEngineVersion, // Replace with the PostgreSQL version you want
+            engineVersion: parseInt(dbEngineVersion), // Replace with the PostgreSQL version you want
             instanceClass: dbInstanceClass, // Choose an appropriate instance class
             multiAz: dbMultiAz,
             name: dbName,
@@ -272,45 +331,167 @@ async function main() {
             owners: [devAccountId, demoAccountId],
         })
 
-        // Create an EC2 instance associated with the security group
-        const ec2Instance = new aws.ec2.Instance("myInstance", {
-            ami: latestAmi.id || amiId, // Replace with your custom AMI ID
-            instanceType: instanceType, // Replace with your desired instance type
-            vpcSecurityGroupIds: [appSecurityGroup.id], // Associate the security group with the instance
+        const encodedUserData = userDataScript.apply(script => Buffer.from(script).toString('base64'));
+
+        // Create a Load Balancer
+        const loadBalancer = new aws.lb.LoadBalancer("loadBalancer", {
+            internal: false,
+            securityGroups: [lbSecurityGroup.id],
+            subnets: publicSubnets.map(subnet => subnet.id),
+        }, { dependsOn: lbSecurityGroup });
+
+        // Define the HTTP target group
+        const httpTargetGroup = new aws.lb.TargetGroup("httpTargetGroup", {
+            port: parseInt(targetGroupPort),
+            protocol: targetGroupProtocol,
+            vpcId: vpc.id,
+            targetType: targetGroupType,
+            healthCheck: {
+                enabled: true,
+                unhealthyThreshold: parseInt(targetGroupUnHealthyThreshold),
+                healthyThreshold: parseInt(targetGroupHealthyThreshold),
+                interval: parseInt(targetGroupInterval),
+                timeout: parseInt(targetGroupTimeout),
+                path: targetGroupPath,
+                port: parseInt(targetGroupPort),
+                protocol: targetGroupProtocol
+            },
+        }, { dependsOn: loadBalancer });
+
+        // Listener for the Load Balancer
+        const httpListener = new aws.lb.Listener("httpListener", {
+            loadBalancerArn: loadBalancer.arn,
+            port: parseInt(listenerGroupPort),
+            protocol: listenerGroupProtocol,
+            defaultActions: [{
+                type: "forward",
+                targetGroupArn: httpTargetGroup.arn
+            }],
+        }, { dependsOn: [loadBalancer, httpTargetGroup] });
+
+        const launchTemplate = new aws.ec2.LaunchTemplate("asg_launch_config", {
+            imageId: latestAmi.id || amiId,
+            instanceType: instanceType,
             keyName: keyName,
             tags: {
-                Name: "MyEC2Instance", // Replace with a meaningful name
+                Name: "MyEC2LaunchTemplate", // Replace with a meaningful name
             },
-            rootBlockDevice: {
-                volumeSize: volumeSize,
-                volumeType: volumeType,
-                deleteOnTermination: true,
-            },
+            blockDeviceMappings: [
+                {
+                    deviceName: deviceName,
+                    ebs: {
+                        volumeSize: volumeSize,
+                        volumeType: volumeType,
+                        deleteOnTermination: true
+                    }
+                }
+            ],
             creditSpecification: {
                 cpuCredits: "standard",
             },
             disableApiTermination: false,
             ebsOptimized: false,
             instanceInitiatedShutdownBehavior: "stop",
-            subnetId: publicSubnets[0].id, // Replace with the ID of the subnet in your VPC
-            userData: pulumi.interpolate`${userDataScript}`,
-            iamInstanceProfile: instanceProfile,
-            role: cloudWatchAgentServerRole.name
+
+            iamInstanceProfile: { name: instanceProfile.name },
+            // vpcSecurityGroupIds: [appSecurityGroup.id],
+            userData: encodedUserData,
+            networkInterfaces: [{
+                associatePublicIpAddress: true,
+                securityGroups: [appSecurityGroup.id]
+            }],
         }, { dependsOn: [rdsInstance, databaseSecurityGroup, cloudWatchPolicyAttachment, instanceProfile] });
+
+        const autoScalingGroup = new aws.autoscaling.Group("autoScalingGroup", {
+            desiredCapacity: parseInt(autoScaleDesiredCapacity),
+            minSize: parseInt(autoScaleMinSize),
+            maxSize: parseInt(autoScaleMaxSize),
+            launchTemplate: {
+                id: launchTemplate.id,
+                version: launchTemplate.latestVersion,
+            },
+            targetGroupArns: [httpTargetGroup.arn],
+            vpcZoneIdentifiers: publicSubnets,
+            tags: [
+                {
+                    key: "AutoScalingGroup",
+                    value: "TargetProperty",
+                    propagateAtLaunch: true,
+                },
+            ]
+
+        }, { dependsOn: [launchTemplate, httpTargetGroup, loadBalancer] });
+
+        // Define scale up policy
+        const scaleUpPolicy = new aws.autoscaling.Policy("scaleUp", {
+            adjustmentType: "ChangeInCapacity",
+            scalingAdjustment: 1,
+            cooldown: parseInt(autoScaleCoolDown),  // seconds
+            autoscalingGroupName: autoScalingGroup.name,
+        }, { dependsOn: autoScalingGroup });
+
+        // Attach an alarm that triggers the policy
+        new aws.cloudwatch.MetricAlarm("cpuHigh", {
+            alarmActions: [scaleUpPolicy.arn],
+            comparisonOperator: metricAlarmScaleUpComparisonOperator,
+            evaluationPeriods: metricAlarmEvaluationPeriods,
+            metricName: metricAlarmMetricName,
+            namespace: metricAlarmNamespace,
+            period: metricAlarmPeriod,
+            statistic: metricAlarmStaistic,
+            threshold: metricAlarmThreshold,
+            alarmDescription: "This metric checks cpu utilization",
+            alarmName: "cpuHigh",
+            dimensions: {
+                AutoScalingGroupName: autoScalingGroup.name,
+            }
+        }, { dependsOn: [scaleUpPolicy, autoScalingGroup] });
+
+        // Define scale down policy
+        const scaleDownPolicy = new aws.autoscaling.Policy("scaleDown", {
+            adjustmentType: "ChangeInCapacity",
+            scalingAdjustment: -1,
+            cooldown: parseInt(autoScaleCoolDown),  // seconds
+            autoscalingGroupName: autoScalingGroup.name,
+        }, { dependsOn: autoScalingGroup });
+
+        // Attach an alarm that triggers the policy
+        new aws.cloudwatch.MetricAlarm("cpuLow", {
+            alarmActions: [scaleDownPolicy.arn],
+            comparisonOperator: metricAlarmScaleDownComparisonOperator,
+            evaluationPeriods: metricAlarmEvaluationPeriods,
+            metricName: metricAlarmMetricName,
+            namespace: metricAlarmNamespace,
+            period: metricAlarmPeriod,
+            statistic: metricAlarmStaistic,
+            threshold: metricAlarmThreshold,
+            alarmDescription: "This metric checks cpu utilization",
+            alarmName: "cpuLow",
+            dimensions: {
+                AutoScalingGroupName: autoScalingGroup.name,
+            },
+        }, { dependsOn: [scaleDownPolicy, autoScalingGroup] });
 
         // Export the security group ID and instance ID
         exports.appSecurityGroupId = appSecurityGroup.id;
         exports.databaseSecurityGroupId = databaseSecurityGroup.id;
-        exports.instanceId = ec2Instance.id;
+        // exports.instanceId = ec2Instance.id;
 
         // Create a DNS record for the web server
         const dnsRecord = new aws.route53.Record("my-instance-dns", {
-            name: "dev.saisuryateja.me",    // Replace with your domain name
+            name: dnsRecordName,    // Replace with your domain name
             type: "A",
-            records: [ec2Instance.publicIp],
-            ttl: 300,
-            zoneId: (await aws.route53.getZone({ name: "dev.saisuryateja.me" })).zoneId,   // Replace with your domain Id
-        }, { dependsOn: ec2Instance });
+            // records: [ec2Instance.publicIp],
+            // ttl: 300,
+            zoneId: (await aws.route53.getZone({ name: dnsRecordName })).zoneId,
+            aliases: [
+                {
+                    evaluateTargetHealth: true,
+                    name: loadBalancer.dnsName,
+                    zoneId: loadBalancer.zoneId
+                }
+            ]  // Replace with your domain Id
+        }, { dependsOn: loadBalancer });
 
         exports.dnsRecord = dnsRecord;
         const logGroup = new aws.cloudwatch.LogGroup("csye6225LogGroup", {

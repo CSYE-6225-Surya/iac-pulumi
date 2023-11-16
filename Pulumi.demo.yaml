@@ -9,14 +9,15 @@ config:
   iac-pulumi:keyName: aws-demo-account-key-pair
   iac-pulumi:volumeSize: 25
   iac-pulumi:volumeType: gp2
-  iac-pulumi:ingressPorts: ["22", "80", "443", "3000"]
+  iac-pulumi:ingressPorts: ["22", "3000"]
+  iac-pulumi:loadBalancerIngressPorts: ["80", "443"]
   iac-pulumi:dbPort: 5432
   iac-pulumi:dbFamily: postgres13
   iac-pulumi:dbAllocatedStorage: 20
   iac-pulumi:dbBackupRetentionPeriod: 7
   iac-pulumi:dbInstanceIndentifier: csye6225
   iac-pulumi:dbEngine: postgres
-  iac-pulumi:dbEngineVersion: 13.7
+  iac-pulumi:dbEngineVersion: 13.10
   iac-pulumi:dbInstanceClass: db.t3.micro
   iac-pulumi:dbMultiAz: false
   iac-pulumi:dbName: csye6225
@@ -27,3 +28,28 @@ config:
   iac-pulumi:dbStorageType: gp3
   iac-pulumi:devAccountId: 912764834865
   iac-pulumi:demoAccountId: 889150626858
+  iac-pulumi:dnsRecordName: demo.saisuryateja.me
+  iac-pulumi:loadBalancerEgressPort: 3000
+  iac-pulumi:targetGroupPort: 3000
+  iac-pulumi:targetGroupProtocol: HTTP
+  iac-pulumi:targetGroupType: instance
+  iac-pulumi:targetGroupUnHealthyThreshold: 2
+  iac-pulumi:targetGroupHealthyThreshold: 3
+  iac-pulumi:targetGroupInterval: 30
+  iac-pulumi:targetGroupTimeout: 5
+  iac-pulumi:targetGroupPath: /healthz
+  iac-pulumi:listenerGroupPort: 80
+  iac-pulumi:listenerGroupProtocol: HTTP
+  iac-pulumi:deviceName: /dev/xvda
+  iac-pulumi:autoScaleDesiredCapacity: 1
+  iac-pulumi:autoScaleMinSize: 1
+  iac-pulumi:autoScaleMaxSize: 3
+  iac-pulumi:autoScaleCoolDown: 60
+  iac-pulumi:metricAlarmScaleUpComparisonOperator: GreaterThanOrEqualToThreshold
+  iac-pulumi:metricAlarmScaleDownComparisonOperator: LessThanOrEqualToThreshold
+  iac-pulumi:metricAlarmMetricName: CPUUtilization
+  iac-pulumi:metricAlarmNamespace: AWS/EC2
+  iac-pulumi:metricAlarmStaistic: Sum
+  iac-pulumi:metricAlarmThreshold: 5
+  iac-pulumi:metricAlarmEvaluationPeriods: 1
+  iac-pulumi:metricAlarmPeriod: 60
