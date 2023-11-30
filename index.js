@@ -1,11 +1,12 @@
 "use strict";
 const pulumi = require("@pulumi/pulumi");
 const aws = require("@pulumi/aws");
+const gcp = require("@pulumi/gcp");
 const SubnetCIDRAdviser = require('subnet-cidr-calculator');
-
+const { region } = require("@pulumi/aws/config");
 const vpcName = "csye-6225"; // Your custom VPC name
 const config = new pulumi.Config("iac-pulumi");
-
+const { project } = require("@pulumi/gcp/config");
 const vpcCidrBlock = config.require("vpcCidrBlock");
 const destinationCidrBlock = config.require("destinationCidrBlock");
 const desiredSubnetCount = config.require("desiredSubnetCount");
@@ -58,6 +59,13 @@ const metricAlarmStaistic = config.require("metricAlarmStaistic");
 const metricAlarmThreshold = config.require("metricAlarmThreshold");
 const metricAlarmEvaluationPeriods = config.require("metricAlarmEvaluationPeriods");
 const metricAlarmPeriod = config.require("metricAlarmPeriod");
+const bucketName = config.require("bucketName");
+const runtime = config.require("runtime");
+const handler = config.require("handler");
+const timeout = config.require("timeout");
+const mailgunApiKey = config.require("mailgunApiKey");
+const mailgunDomain = config.require("mailgunDomain");
+const senderEmail = config.require("senderEmail");
 
 async function main() {
 
@@ -274,13 +282,148 @@ async function main() {
             },
         }, { dependsOn: dbSubnetGroup });
 
-        const userDataScript = pulumi.all([rdsInstance.dbName, rdsInstance.username, rdsInstance.password, rdsInstance.address]).apply(([dbname, dbusername, dbpassword, dbhost]) => {
+        // Create a AWS DynamoDB table
+        const userTable = new aws.dynamodb.Table("userTable", {
+            attributes: [
+                { name: "id", type: "S" },
+                { name: "email", type: "S" },
+                { name: "submissionCount", type: "N" },
+                { name: "submissionUrl", type: "S" },
+                { name: "submissionId", type: "S" },
+                { name: "fileName", type: "S" }
+            ],
+            hashKey: "id",
+            readCapacity: 1,
+            writeCapacity: 1,
+            globalSecondaryIndexes: [
+                {
+                    name: "emailIndex",
+                    projectionType: "ALL",  // You can adjust the projection type based on your needs
+                    readCapacity: 1,
+                    writeCapacity: 1,
+                    hashKey: "email",
+                },
+                {
+                    name: "SubmissionUrlIndex",
+                    projectionType: "ALL",  // You can adjust the projection type based on your needs
+                    readCapacity: 1,
+                    writeCapacity: 1,
+                    hashKey: "submissionUrl",
+                },
+                {
+                    name: "SubmissionIdIndex",
+                    projectionType: "ALL",  // You can adjust the projection type based on your needs
+                    readCapacity: 1,
+                    writeCapacity: 1,
+                    hashKey: "submissionId",
+                },
+                {
+                    name: "SubmissionCountIndex",
+                    projectionType: "ALL",  // You can adjust the projection type based on your needs
+                    readCapacity: 1,
+                    writeCapacity: 1,
+                    hashKey: "submissionCount",
+                },
+                {
+                    name: "fileNameIndex",
+                    projectionType: "ALL",  // You can adjust the projection type based on your needs
+                    readCapacity: 1,
+                    writeCapacity: 1,
+                    hashKey: "fileName",
+                },
+            ],
+        });
+
+        exports.tableName = userTable.name;
+
+        const serviceAccount = new gcp.serviceaccount.Account("my-service-account", {
+            accountId: "my-service-account",
+            displayName: "My Service Account",
+            project: project,
+        });
+        const serviceAccountKey = new gcp.serviceaccount.Key("my-service-account-key", {
+            serviceAccountId: serviceAccount.name,
+        });
+
+        const storageAdminRoleBinding = new gcp.projects.IAMMember("grant-storage-admin-role", {
+            member: serviceAccount.email.apply(email => `serviceAccount:${email}`),
+            role: "roles/storage.admin",
+            project: project,
+        }, { dependsOn: serviceAccount });
+
+        const lambdaRole = new aws.iam.Role("lambdaRole", {
+            assumeRolePolicy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                    Action: "sts:AssumeRole",
+                    Principal: {
+                        Service: "lambda.amazonaws.com",
+                    },
+                    Effect: "Allow",
+                    Sid: "",
+                }],
+            }),
+        });
+
+        new aws.iam.RolePolicyAttachment("lambdaFullAccess", {
+            role: lambdaRole.name,
+            policyArn: "arn:aws:iam::aws:policy/AWSLambda_FullAccess",
+        });
+
+        new aws.iam.RolePolicyAttachment("lambdaBasicExecutionRole", {
+            role: lambdaRole.name,
+            policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        }, { dependsOn: lambdaRole });
+
+        new aws.iam.RolePolicyAttachment("AWSDynamoDBAccessForLambda", {
+            role: lambdaRole.name,
+            policyArn: "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+        }, { dependsOn: lambdaRole })
+
+        const lambda = new aws.lambda.Function("mylambda", {
+            code: new pulumi.asset.AssetArchive({
+                ".": new pulumi.asset.FileArchive("./package.zip"), // replace with your directory
+            }),
+            role: lambdaRole.arn,
+            runtime: runtime,
+            handler: handler,  // replace with your handler
+            timeout: timeout,
+            environment: {
+                variables: {
+                    "GOOGLE_CREDENTIALS": serviceAccountKey.privateKey,
+                    "BUCKET_NAME": bucketName,
+                    "MAILGUN_API_KEY": mailgunApiKey,
+                    "MAILGUN_DOMAIN": mailgunDomain,
+                    "SENDER_EMAIL": senderEmail,
+                    "DYNAMODB_TABLE_NAME": userTable.name,
+                    "AWS_REGION_DETAILS": region
+                }
+            }
+        }, { dependsOn: [serviceAccountKey, userTable] });
+
+        const topic = new aws.sns.Topic("myUserTopic");
+
+        const permission = new aws.lambda.Permission("my-permission", {
+            action: "lambda:InvokeFunction",
+            function: lambda,
+            principal: "sns.amazonaws.com",
+            sourceArn: topic.arn,
+        });
+
+        // Create a subscription to the just created SNSTopic
+        const subscription = topic.onEvent("my-subscription", lambda);
+
+        exports.topic = topic.arn;
+
+        const userDataScript = pulumi.all([rdsInstance.dbName, rdsInstance.username, rdsInstance.password, rdsInstance.address, topic.arn]).apply(([dbname, dbusername, dbpassword, dbhost, topicArn]) => {
             return `#!/bin/bash
             echo "DB_NAME=${dbname}" >> /opt/webapp/.env
             echo "DB_USER=${dbusername}" >> /opt/webapp/.env
             echo "DB_PASSWORD=${dbpassword}" >> /opt/webapp/.env
             echo "DB_HOST=${dbhost}" >> /opt/webapp/.env
             echo "DB_PORT=${dbPort}" >> /opt/webapp/.env
+            echo "TOPIC_ARN=${topicArn}" >> /opt/webapp/.env
+            echo "AWS_REGION=${region}" >> /opt/webapp/.env
             cd /opt/webapp
             node changeConfig.js
             npm run migrate
@@ -321,6 +464,16 @@ async function main() {
             role: cloudWatchAgentServerRole.name,
             policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
         }, { dependsOn: cloudWatchAgentServerRole });
+
+        // Attach SNS permissions policy
+        const snsPolicyAttachment = new aws.iam.RolePolicyAttachment(
+            "snsPolicyAttachment",
+            {
+                role: cloudWatchAgentServerRole.name,
+                policyArn: "arn:aws:iam::aws:policy/AmazonSNSFullAccess", // Adjust the policy as needed
+            },
+            { dependsOn: cloudWatchAgentServerRole }
+        );
 
         const instanceProfile = new aws.iam.InstanceProfile("instanceProfile", {
             role: cloudWatchAgentServerRole.name
@@ -400,7 +553,7 @@ async function main() {
                 associatePublicIpAddress: true,
                 securityGroups: [appSecurityGroup.id]
             }],
-        }, { dependsOn: [rdsInstance, databaseSecurityGroup, cloudWatchPolicyAttachment, instanceProfile] });
+        }, { dependsOn: [rdsInstance, databaseSecurityGroup, cloudWatchPolicyAttachment, snsPolicyAttachment, instanceProfile, topic] });
 
         const autoScalingGroup = new aws.autoscaling.Group("autoScalingGroup", {
             desiredCapacity: parseInt(autoScaleDesiredCapacity),
