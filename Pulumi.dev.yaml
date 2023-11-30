@@ -1,6 +1,7 @@
 config:
   aws:profile: dev
   aws:region: us-east-1
+  gcp:project: dev-csye6225-fall2023
   iac-pulumi:vpcCidrBlock: 10.0.0.0/16
   iac-pulumi:destinationCidrBlock: 0.0.0.0/0
   iac-pulumi:desiredSubnetCount: 3
@@ -53,3 +54,10 @@ config:
   iac-pulumi:metricAlarmThreshold: 5
   iac-pulumi:metricAlarmEvaluationPeriods: 1
   iac-pulumi:metricAlarmPeriod: 60
+  iac-pulumi:bucketName: fall2023-csye6225
+  iac-pulumi:runtime: nodejs18.x
+  iac-pulumi:handler: index.handler
+  iac-pulumi:timeout: 60
+  iac-pulumi:mailgunApiKey: 79e37ce92632ca33dc33a5a105e20123-30b58138-d4c539aa
+  iac-pulumi:mailgunDomain: saisuryateja.me
+  iac-pulumi:senderEmail: Sai Surya <sai.suryateja14@gmail.com>
