@@ -39,8 +39,8 @@ config:
   iac-pulumi:targetGroupInterval: 30
   iac-pulumi:targetGroupTimeout: 5
   iac-pulumi:targetGroupPath: /healthz
-  iac-pulumi:listenerGroupPort: 80
-  iac-pulumi:listenerGroupProtocol: HTTP
+  iac-pulumi:listenerGroupPort: 443
+  iac-pulumi:listenerGroupProtocol: HTTPS
   iac-pulumi:deviceName: /dev/xvda
   iac-pulumi:autoScaleDesiredCapacity: 1
   iac-pulumi:autoScaleMinSize: 1
@@ -61,3 +61,4 @@ config:
   iac-pulumi:mailgunApiKey: 79e37ce92632ca33dc33a5a105e20123-30b58138-d4c539aa
   iac-pulumi:mailgunDomain: saisuryateja.me
   iac-pulumi:senderEmail: Sai Surya <sai.suryateja14@gmail.com>
+  iac-pulumi:certificateArn: arn:aws:acm:us-east-1:912764834865:certificate/7d38ae35-e1c1-4fe2-9256-3dc965be833a

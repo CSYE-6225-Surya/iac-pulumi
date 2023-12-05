@@ -66,6 +66,7 @@ const timeout = config.require("timeout");
 const mailgunApiKey = config.require("mailgunApiKey");
 const mailgunDomain = config.require("mailgunDomain");
 const senderEmail = config.require("senderEmail");
+const certificateArn = config.require("certificateArn");
 
 async function main() {
 
@@ -520,6 +521,9 @@ async function main() {
                 type: "forward",
                 targetGroupArn: httpTargetGroup.arn
             }],
+            certificateArn: certificateArn,
+            sslPolicy: "ELBSecurityPolicy-2016-08"
+
         }, { dependsOn: [loadBalancer, httpTargetGroup] });
 
         const launchTemplate = new aws.ec2.LaunchTemplate("asg_launch_config", {
