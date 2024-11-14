@@ -1,7 +1,7 @@
 config:
   aws:profile: demo
   aws:region: us-east-1
-  gcp:project: fine-command-406503
+  gcp:project: fine-command-656554
   iac-pulumi:vpcCidrBlock: 10.0.0.0/16
   iac-pulumi:destinationCidrBlock: 0.0.0.0/0
   iac-pulumi:desiredSubnetCount: 3
@@ -22,13 +22,13 @@ config:
   iac-pulumi:dbInstanceClass: db.t3.micro
   iac-pulumi:dbMultiAz: false
   iac-pulumi:dbName: csye6225
-  iac-pulumi:dbPassword: rdspostgres1
+  iac-pulumi:dbPassword: 7665556
   iac-pulumi:dbSkipFinalSnapshot: true
   iac-pulumi:dbUsername: csye6225
   iac-pulumi:dbPubliclyAccessible: false
   iac-pulumi:dbStorageType: gp3
-  iac-pulumi:devAccountId: 912764834865
-  iac-pulumi:demoAccountId: 889150626858
+  iac-pulumi:devAccountId: 45654545454
+  iac-pulumi:demoAccountId: 67676767676
   iac-pulumi:dnsRecordName: demo.saisuryateja.me
   iac-pulumi:loadBalancerEgressPort: 3000
   iac-pulumi:targetGroupPort: 3000
@@ -58,7 +58,7 @@ config:
   iac-pulumi:runtime: nodejs18.x
   iac-pulumi:handler: index.handler
   iac-pulumi:timeout: 60
-  iac-pulumi:mailgunApiKey: 79e37ce92632ca33dc33a5a105e20123-30b58138-d4c539aa
+  iac-pulumi:mailgunApiKey: 45t4554543543-30b58138-455454543454
   iac-pulumi:mailgunDomain: saisuryateja.me
   iac-pulumi:senderEmail: Sai Surya <sai.suryateja14@gmail.com>
-  iac-pulumi:certificateArn: arn:aws:acm:us-east-1:889150626858:certificate/e81bbf39-7b78-430c-8365-ff2716cb92aa
+  iac-pulumi:certificateArn: arn:aws:acm:us-east-1:456545435434:certificate/e81bbf39-7b78-430c-8365-ff2716cb92aa
