@@ -27,8 +27,8 @@ config:
   iac-pulumi:dbUsername: csye6225
   iac-pulumi:dbPubliclyAccessible: false
   iac-pulumi:dbStorageType: gp3
-  iac-pulumi:devAccountId: 912764834865
-  iac-pulumi:demoAccountId: 889150626858
+  iac-pulumi:devAccountId: 5675675
+  iac-pulumi:demoAccountId: 55656565
   iac-pulumi:dnsRecordName: dev.saisuryateja.me
   iac-pulumi:loadBalancerEgressPort: 3000
   iac-pulumi:targetGroupPort: 3000
@@ -58,7 +58,7 @@ config:
   iac-pulumi:runtime: nodejs18.x
   iac-pulumi:handler: index.handler
   iac-pulumi:timeout: 60
-  iac-pulumi:mailgunApiKey: 79e37ce92632ca33dc33a5a105e20123-30b58138-d4c539aa
+  iac-pulumi:mailgunApiKey: 346543456545
   iac-pulumi:mailgunDomain: saisuryateja.me
   iac-pulumi:senderEmail: Sai Surya <sai.suryateja14@gmail.com>
-  iac-pulumi:certificateArn: arn:aws:acm:us-east-1:912764834865:certificate/7d38ae35-e1c1-4fe2-9256-3dc965be833a
+  iac-pulumi:certificateArn: arn:aws:acm:us-east-1:912454564534865:certificate/7d38ae35-e1c1-4fe2-9256-3dc965be833a
